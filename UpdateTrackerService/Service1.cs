@@ -55,6 +55,19 @@ namespace UpdateTrackerService
 
             public Logger()
             {
+                FileStream fstream = null;
+
+                try
+                {
+                    fstream = new FileStream("G:\\Практика\\UpdateTrackerService\\log.txt", FileMode.Create);
+                }
+                catch (Exception ex)
+                { }
+                finally
+                {
+                    fstream?.Close();
+                }
+
                 serviceBroker = new ServiceBroker(connectionString, command);
 
                 appStartTime = DateTime.Now;
@@ -105,8 +118,7 @@ namespace UpdateTrackerService
 
                             using (StreamWriter writer = new StreamWriter("G:\\Практика\\UpdateTrackerService\\log.txt", true))
                             {
-                                writer.WriteLine(String.Format("{0} товар {1}",
-                                    DateTime.Now.ToString("dd/MM/yyyy hh:mm:ss"), product));
+                                writer.WriteLine(String.Format("{0}", product));
                                 writer.Flush();
                             }
 

@@ -30,10 +30,15 @@ namespace UpdateTrackerService
 
         protected override void OnStart(string[] args)
         {
-            System.Diagnostics.Debugger.Launch();
-            logger = new Logger();
-            Thread loggerThread = new Thread(new ThreadStart(logger.Start));
-            loggerThread.Start();
+            
+            //System.Diagnostics.Debugger.Launch();
+            
+            logger = new Logger();             /* Ключевой класс данного сервиса Logger. Он содержит основной функционал, который будет выполняться сервисом.
+                                                  Создаем объект заданного класса. */
+
+            Thread loggerThread = new Thread(new ThreadStart(logger.Start)); // Создаем новый поток, аргумент new ThreadStart - это делегает, представляющий выполняемое в потоке действие.
+            
+            loggerThread.Start(); // Вызываем метод Start() класса Logger, который зацикливает данный поток до тех пор, пока заданный объект loggerThread доступен.
         }
 
         protected override void OnStop()
@@ -45,17 +50,18 @@ namespace UpdateTrackerService
         class Logger
         {
 
-            object locker = new object();
-            bool enabled = true;
+            object locker = new object(); // При инициализации объекта класса Logger будет создаваться объект-затычка locker,
+                                          // он необходим для того, чтобы разграничить доступ к файлу log.txt, чтобы не нарушать очередь поступления данных. 
+            bool enabled = true; // включен ли объект.
 
-            private ServiceBroker serviceBroker;
+            private ServiceBroker serviceBroker; // создаем serviceBroker - это объект класса ServiceBroker, который будет прослушивать базу данных и обрабатывать поступление новых записей.
             private string connectionString = $@"Data Source=.\ARTHURSQL;Initial Catalog=ShopDB;Integrated Security=false;User ID = UpdateTrackerService;Password = 123321; MultipleActiveResultSets=true";
-            private string command = $"SELECT Id FROM dbo.Product";
-            private DateTime appStartTime;
+            private string command = $"SELECT Id FROM dbo.Product"; //при изменении результата данного запроса к базе данных ShopDB будет вызываться событие OnChange класса ServiceBroker. 
+            private DateTime appStartTime; // время старта работы сервиса.
 
             public Logger()
             {
-                FileStream fstream = null;
+                FileStream fstream = null; // работа с файлом log.txt, его создание, если он отсутствует. 
 
                 try
                 {
@@ -68,13 +74,13 @@ namespace UpdateTrackerService
                     fstream?.Close();
                 }
 
-                serviceBroker = new ServiceBroker(connectionString, command);
+                serviceBroker = new ServiceBroker(connectionString, command); //  инициализируем serviceBorker
 
-                appStartTime = DateTime.Now;
+                appStartTime = DateTime.Now; // инициализируем время старта работы сервиса.
 
-                serviceBroker.OnMessageSent += new ServiceBroker.MessageHandler(RecordEntry);
+                serviceBroker.OnMessageSent += new ServiceBroker.MessageHandler(RecordEntry); // вешаем обработчик RecordEntry на событие OnMessageSent, которое срабатывает при вызове события OnChange
 
-                serviceBroker.StartListen();
+                serviceBroker.StartListen(); // начинаем прослушивать базу данных.
             }
 
             public void Start()
@@ -86,17 +92,17 @@ namespace UpdateTrackerService
             }
             public void Stop()
             {
-                SqlDependency.Stop(connectionString);
-                enabled = false;
+                SqlDependency.Stop(connectionString); // прекращаем прослушивать базу данных.
+                enabled = false; // делаем объект недоступным.
             }
 
             private void RecordEntry(object sender, string Message)
             {
-                lock (locker)
+                lock (locker) // блокируем данный участок кода для остальных потоков, пока первый на очереди поток не закончит работу с файлом.
                 {
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
-                        SqlCommand cmd = new SqlCommand($"EXEC prGetTrackerTable '{appStartTime}'", connection);
+                        SqlCommand cmd = new SqlCommand($"EXEC prGetTrackerTable '{appStartTime}'", connection); //процедура возвращает список новый записей и очищает таблицу бд.
 
                         connection.Open();
 
@@ -107,7 +113,7 @@ namespace UpdateTrackerService
                         double productPrice;
                         DateTimeOffset date;
 
-                        while (reader.Read())
+                        while (reader.Read()) // записываем в файл все поступившие новые объекты из базы данных. 
                         {
                             id = Convert.ToInt32(reader["Id"]);
                             productName = Convert.ToString(reader["Name"]);
@@ -125,7 +131,8 @@ namespace UpdateTrackerService
                         }
                     }
 
-                    serviceBroker.StartListen();
+                    serviceBroker.StartListen(); // после срабатывания события OnChange класса ServiceBroker необходимо заново начать прослушивание бд,
+                                                 // т.к. необходимо снова повесить обработчик на данное событие.
                 }
             }
         }

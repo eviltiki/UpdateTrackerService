@@ -27,12 +27,13 @@ namespace UpdateTrackerService
             this.connectionString = connectionString;
             this.command = command;
 
-            SqlDependency.Start(connectionString);
+            SqlDependency.Start(connectionString); // Начинаем прослушивать бд, чтобы получать уведомления об измении зависимости от экземляра SQL Server,
+                                                   // указанного в строке подключения connectionString.
 
             connection = new SqlConnection(connectionString);
         }
 
-        public void StartListen()
+        public void StartListen() // Создаем команду и новую зависимость с этой командой.
         {
             try
             {
@@ -48,12 +49,12 @@ namespace UpdateTrackerService
 
                     dep = new SqlDependency(cmd);
 
-                    dep.OnChange += OnChange;
+                    dep.OnChange += OnChange; // вешаем обработчик OnChange на событие OnChange зависимости dep 
 
                     if (connection.State == ConnectionState.Closed)
-                        connection.Open();
+                        connection.Open(); 
 
-                    var sqlDataReader = cmd.ExecuteReader();
+                    var sqlDataReader = cmd.ExecuteReader(); // выполняем команду
                 }
             }
             catch (Exception ex)
@@ -67,9 +68,9 @@ namespace UpdateTrackerService
             SqlDependency.Stop(connectionString);
         }
 
-        private void OnChange(object sender, SqlNotificationEventArgs e)
+        private void OnChange(object sender, SqlNotificationEventArgs e) // обработчик события OnChange
         {
-            dep.OnChange -= OnChange;
+            dep.OnChange -= OnChange; // после срабатывания события снимаем обработчик, и вызываем событие OnMessageSent.
             dep = null;
 
             OnMessageSent?.Invoke(this, "Message sent");

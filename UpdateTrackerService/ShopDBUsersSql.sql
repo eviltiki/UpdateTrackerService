@@ -1,3 +1,6 @@
+DROP USER UpdateTrackerService
+GO
+
 DROP LOGIN UpdateTrackerService
 GO
 

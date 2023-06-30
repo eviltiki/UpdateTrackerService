@@ -18,6 +18,9 @@ namespace UpdateTrackerService
     public partial class Service1 : ServiceBase
     {
         Logger logger;
+        DateTracker dataTracker;
+        private string connectionString = $@"Data Source=.\ARTHURSQL;Initial Catalog=ShopDB;Integrated Security=false;User ID = UpdateTrackerService;
+                                                Password = 123321; MultipleActiveResultSets=true";
 
         public Service1()
         {
@@ -30,10 +33,14 @@ namespace UpdateTrackerService
 
         protected override void OnStart(string[] args)
         {
-            
-            //System.Diagnostics.Debugger.Launch();
-            
-            logger = new Logger();             /* Ключевой класс данного сервиса Logger. Он содержит основной функционал, который будет выполняться сервисом.
+            //System.Diagnostics.Debugger.Launch(); // для отладки!!!
+
+            dataTracker = new DateTracker(connectionString);
+
+            Thread dateTrackerThread = new Thread(new ThreadStart(dataTracker.Start));
+            dateTrackerThread.Start();
+
+            logger = new Logger(connectionString);             /* Ключевой класс данного сервиса Logger. Он содержит основной функционал, который будет выполняться сервисом.
                                                   Создаем объект заданного класса. */
 
             Thread loggerThread = new Thread(new ThreadStart(logger.Start)); // Создаем новый поток, аргумент new ThreadStart - это делегает, представляющий выполняемое в потоке действие.
@@ -43,6 +50,7 @@ namespace UpdateTrackerService
 
         protected override void OnStop()
         {
+            dataTracker.Stop();
             logger.Stop();
             Thread.Sleep(1000);
         }
@@ -54,18 +62,21 @@ namespace UpdateTrackerService
                                           // он необходим для того, чтобы разграничить доступ к файлу log.txt, чтобы не нарушать очередь поступления данных. 
             bool enabled = true; // включен ли объект.
 
+            string connectionString;
             private ServiceBroker serviceBroker; // создаем serviceBroker - это объект класса ServiceBroker, который будет прослушивать базу данных и обрабатывать поступление новых записей.
-            private string connectionString = $@"Data Source=.\ARTHURSQL;Initial Catalog=ShopDB;Integrated Security=false;User ID = UpdateTrackerService;Password = 123321; MultipleActiveResultSets=true";
-            private string command = $"SELECT Id FROM dbo.Product"; //при изменении результата данного запроса к базе данных ShopDB будет вызываться событие OnChange класса ServiceBroker. 
+            private string command = $"SELECT OnSale FROM dbo.Product"; //при изменении результата данного запроса к базе данных ShopDB будет вызываться событие OnChange класса ServiceBroker. 
             private DateTime appStartTime; // время старта работы сервиса.
 
-            public Logger()
+
+            public Logger(string connectionString)
             {
+                this.connectionString = connectionString;
+
                 FileStream fstream = null; // работа с файлом log.txt, его создание, если он отсутствует. 
 
                 try
                 {
-                    fstream = new FileStream("G:\\Практика\\UpdateTrackerService\\log.txt", FileMode.Create);
+                    fstream = new FileStream("G:\\Практика\\UpdateTrackerService\\log.txt", FileMode.Create); // файл, где хранится лог
                 }
                 catch (Exception ex)
                 { }
@@ -102,7 +113,7 @@ namespace UpdateTrackerService
                 {
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
-                        SqlCommand cmd = new SqlCommand($"EXEC prGetTrackerTable '{appStartTime}'", connection); //процедура возвращает список новый записей и очищает таблицу бд.
+                        SqlCommand cmd = new SqlCommand($"EXEC prGetProductOnSale", connection);
 
                         connection.Open();
 
@@ -135,6 +146,50 @@ namespace UpdateTrackerService
                                                  // т.к. необходимо снова повесить обработчик на данное событие.
                 }
             }
+        }
+
+        class DateTracker
+        {
+            object locker = new object();
+
+            bool enabled = true;
+
+            string connectionString;
+
+            public DateTracker(string connectionString)
+            {
+                this.connectionString = connectionString;
+
+            }
+
+            public void Start()
+            {
+                while (enabled)
+                {
+                    UpdateTableData();
+                    Thread.Sleep(1000);
+                }
+            }
+            public void Stop()
+            {
+                enabled = false;
+            }
+
+            public void UpdateTableData()
+            {
+                lock (locker)
+                {
+                    using (SqlConnection connection = new SqlConnection(connectionString))
+                    {
+                        SqlCommand cmd = new SqlCommand($"EXEC prUpdateProductData", connection);
+
+                        connection.Open();
+
+                        int count = cmd.ExecuteNonQuery();
+                    }
+                }
+            }
+
         }
     }
 }

@@ -35,9 +35,11 @@ namespace UpdateTrackerService
         {
             //System.Diagnostics.Debugger.Launch(); // для отладки!!!
 
-            dataTracker = new DateTracker(connectionString);
+            dataTracker = new DateTracker(connectionString); // Класс DateTracker отвечает за отслеживание и своевременное обновление товаров,
+                                                             // которые поступили на продажу. Когда дата будет совпадать с настоящей,
+                                                             // то флаг OnSale будет установлен в 1. 
 
-            Thread dateTrackerThread = new Thread(new ThreadStart(dataTracker.Start));
+            Thread dateTrackerThread = new Thread(new ThreadStart(dataTracker.Start)); // поток для работы этого трекера
             dateTrackerThread.Start();
 
             logger = new Logger(connectionString);             /* Ключевой класс данного сервиса Logger. Он содержит основной функционал, который будет выполняться сервисом.
@@ -113,7 +115,8 @@ namespace UpdateTrackerService
                 {
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
-                        SqlCommand cmd = new SqlCommand($"EXEC prGetProductOnSale", connection);
+                        SqlCommand cmd = new SqlCommand($"EXEC prGetProductOnSale", connection); // процедура, которая возвращает товары, которые помечены на продажу,
+                                                                                                 // и устанавливает им флаг OnSale = 2
 
                         connection.Open();
 
@@ -166,7 +169,7 @@ namespace UpdateTrackerService
             {
                 while (enabled)
                 {
-                    UpdateTableData();
+                    UpdateTableData(); // каждую секунду вызывает метод, который обновляет данные, если это необходимо.
                     Thread.Sleep(1000);
                 }
             }
@@ -181,7 +184,8 @@ namespace UpdateTrackerService
                 {
                     using (SqlConnection connection = new SqlConnection(connectionString))
                     {
-                        SqlCommand cmd = new SqlCommand($"EXEC prUpdateProductData", connection);
+                        SqlCommand cmd = new SqlCommand($"EXEC prUpdateProductData", connection); // вызывает хранимую в бд процедуру, которая обновляет флаг
+                                                                                                  // OnSale (0 - не в продаже, 1 - отмечен на продажу, 2 - в продаже)
 
                         connection.Open();
 

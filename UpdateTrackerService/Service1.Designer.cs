@@ -30,6 +30,8 @@
         {
             components = new System.ComponentModel.Container();
             this.ServiceName = "UpdateTrackerService";
+
+            
         }
 
         #endregion

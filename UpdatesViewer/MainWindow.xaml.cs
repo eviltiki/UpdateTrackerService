@@ -17,6 +17,13 @@ using System.ServiceProcess;
 using System.ComponentModel;
 using System.Threading;
 using System.Security.AccessControl;
+using System.IO.MemoryMappedFiles;
+using System.Drawing;
+using System.Runtime.InteropServices;
+using UpdatesViewer.Models;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using System.Diagnostics;
+using System.Xml.Linq;
 
 namespace UpdatesViewer
 {
@@ -33,6 +40,10 @@ namespace UpdatesViewer
         static EventWaitHandle handleMessage;
 
         static EventWaitHandle handleOpenReceiver;
+
+        static MemoryMappedFile memoryMapped;
+
+        string user;
 
         public MainWindow()
         {
@@ -93,19 +104,28 @@ namespace UpdatesViewer
 
             viewModel = (NotifyViewModel)DataContext;
 
-            Thread thread = new Thread(ServerStart);
-            thread.Name = $"Server";
-            thread.Start();
+            user = Environment.UserDomainName + "\\"
+                + Environment.UserName;
 
             string serviceName = "UpdateTrackerService";
 
             service = new ServiceController(serviceName);
 
             ServiceStart();
+
+            memoryMapped = MemoryMappedFile.OpenExisting("Global\\mapmemory");
+
+            Thread thread = new Thread(ServerStart);
+            thread.Name = $"Server";
+            thread.Start();
         }
 
         private void ServerStart()
         {
+            string pId;
+            string pName;
+            string pPrice;
+            string pDate;
 
             while (enabled)
             {
@@ -113,7 +133,22 @@ namespace UpdatesViewer
 
                 if (viewModel.NotifyCommand.CanExecute(null))
                 {
-                    viewModel.NotifyCommand.Execute("Товар поступил в продажу.");
+                    using (var accessor = memoryMapped.CreateViewAccessor(0, 255, MemoryMappedFileAccess.Read))
+                    {
+                        int size = 255;
+                        var readOut = new byte[size];
+
+                        accessor.ReadArray(0, readOut, 0, size);
+                        var finalValue = Encoding.UTF8.GetString(readOut);
+                        string[] strArr = finalValue.Split(";"); //$"Код={id};Название={name};Цена={price};Дата={date}";
+
+                        pId = strArr[0].Split("=")[1];
+                        pName = strArr[1].Split("=")[1];
+                        pPrice = strArr[2].Split("=")[1];
+                        pDate = strArr[3].Split("=")[1];
+
+                    }
+                    viewModel.NotifyCommand.Execute($"Товар {pName} поступил в продажу.");
                 }
 
                 handleOpenReceiver.Set();

@@ -18,6 +18,7 @@ using System.IO.MemoryMappedFiles;
 using System.Security.AccessControl;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Security.Principal;
 
 namespace UpdateTrackerService
 {
@@ -30,6 +31,7 @@ namespace UpdateTrackerService
 
         static EventWaitHandle handleMessage;
         static EventWaitHandle handleOpenReceiver;
+        static MemoryMappedFile memoryMapped;
 
         public Service1()
         {
@@ -62,6 +64,16 @@ namespace UpdateTrackerService
                 throw new Exception("Не удалось найти OnOpenReceiver event handler.");
             }
 
+            memoryMapped = MemoryMappedFile.CreateOrOpen("Global\\mapmemory", 100000);
+
+            var ace = new AccessRule<MemoryMappedFileRights>("ARTHUR-PC\\Arthur",
+                            MemoryMappedFileRights.FullControl, AccessControlType.Allow);
+            var acl = new MemoryMappedFileSecurity();
+            
+            acl.AddAccessRule(ace);
+
+            memoryMapped.SetAccessControl(acl);
+
             dataTracker = new DateTracker(connectionString); // Класс DateTracker отвечает за отслеживание и своевременное обновление товаров,
                                                              // которые поступили на продажу. Когда дата будет совпадать с настоящей,
                                                              // то флаг OnSale будет установлен в 1. 
@@ -91,6 +103,8 @@ namespace UpdateTrackerService
             object locker = new object(); // При инициализации объекта класса Logger будет создаваться объект-затычка locker,
                                           // он необходим для того, чтобы разграничить доступ к файлу log.txt, чтобы не нарушать очередь поступления данных. 
             bool enabled = true; // включен ли объект.
+            
+            object locker2 = new object();
 
             string connectionString;
             private ServiceBroker serviceBroker; // создаем serviceBroker - это объект класса ServiceBroker, который будет прослушивать базу данных и обрабатывать поступление новых записей.
@@ -101,19 +115,6 @@ namespace UpdateTrackerService
             public Logger(string connectionString)
             {
                 this.connectionString = connectionString;
-
-                FileStream fstream = null; // работа с файлом log.txt, его создание, если он отсутствует. 
-
-                try
-                {
-                    fstream = new FileStream("G:\\Практика\\UpdateTrackerService\\log.txt", FileMode.Create); // файл, где хранится лог
-                }
-                catch (Exception ex)
-                { }
-                finally
-                {
-                    fstream?.Close();
-                }
 
                 serviceBroker = new ServiceBroker(connectionString, command); //  инициализируем serviceBorker
 
@@ -131,14 +132,28 @@ namespace UpdateTrackerService
 
                     if (Products.Count > 0)
                     {
-                        var product = Products.Dequeue();
+                        Product product = Products.Dequeue();
+
+                        string productStr = product.ToString();
+
+                        byte[] first = Encoding.UTF8.GetBytes(productStr);
+
+                        byte[] second = new byte[255];
+
+                        Buffer.BlockCopy(first, 0, second, 0, first.Length);
+
+                        lock (locker2)
+                        {
+                            using (var accessor = memoryMapped.CreateViewAccessor(0, first.Length))
+                            {
+                                accessor.WriteArray(0, first, 0, first.Length);
+                            }
+                        }
 
                         WaitHandle.SignalAndWait(handleMessage, handleOpenReceiver);
 
                         handleOpenReceiver.Reset();
                     }
-
-                    Thread.Sleep(3000);
                 }
             }
 

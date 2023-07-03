@@ -6,7 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace UpdateTracker.Models
+namespace UpdatesViewer.Models
 {
     public class Product : INotifyPropertyChanged
     {

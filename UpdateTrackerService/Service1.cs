@@ -7,11 +7,17 @@ using System.Data.SqlClient;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.AccessControl;
 using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using UpdateTracker.Models;
+using System.IO;
+using System.IO.MemoryMappedFiles;
+using System.Security.AccessControl;
+using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace UpdateTrackerService
 {
@@ -21,6 +27,9 @@ namespace UpdateTrackerService
         DateTracker dataTracker;
         private string connectionString = $@"Data Source=.\ARTHURSQL;Initial Catalog=ShopDB;Integrated Security=false;User ID = UpdateTrackerService;
                                                 Password = 123321; MultipleActiveResultSets=true";
+
+        static EventWaitHandle handleMessage;
+        static EventWaitHandle handleOpenReceiver;
 
         public Service1()
         {
@@ -35,6 +44,24 @@ namespace UpdateTrackerService
         {
             //System.Diagnostics.Debugger.Launch(); // для отладки!!!
 
+            try 
+            {
+                handleMessage = EventWaitHandle.OpenExisting("Global\\OnMessage");
+            }
+            catch (Exception ex) 
+            {
+                throw new Exception("Не удалось найти OnMessage event handler.");
+            }
+
+            try
+            {
+                handleOpenReceiver = EventWaitHandle.OpenExisting("Global\\OnOpenReceiver");
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Не удалось найти OnOpenReceiver event handler.");
+            }
+
             dataTracker = new DateTracker(connectionString); // Класс DateTracker отвечает за отслеживание и своевременное обновление товаров,
                                                              // которые поступили на продажу. Когда дата будет совпадать с настоящей,
                                                              // то флаг OnSale будет установлен в 1. 
@@ -48,6 +75,7 @@ namespace UpdateTrackerService
             Thread loggerThread = new Thread(new ThreadStart(logger.Start)); // Создаем новый поток, аргумент new ThreadStart - это делегает, представляющий выполняемое в потоке действие.
             
             loggerThread.Start(); // Вызываем метод Start() класса Logger, который зацикливает данный поток до тех пор, пока заданный объект loggerThread доступен.
+
         }
 
         protected override void OnStop()
@@ -68,7 +96,7 @@ namespace UpdateTrackerService
             private ServiceBroker serviceBroker; // создаем serviceBroker - это объект класса ServiceBroker, который будет прослушивать базу данных и обрабатывать поступление новых записей.
             private string command = $"SELECT OnSale FROM dbo.Product"; //при изменении результата данного запроса к базе данных ShopDB будет вызываться событие OnChange класса ServiceBroker. 
             private DateTime appStartTime; // время старта работы сервиса.
-
+            private Queue<Product> Products = new Queue<Product>();
 
             public Logger(string connectionString)
             {
@@ -100,9 +128,20 @@ namespace UpdateTrackerService
             {
                 while (enabled)
                 {
-                    Thread.Sleep(1000);
+
+                    if (Products.Count > 0)
+                    {
+                        var product = Products.Dequeue();
+
+                        WaitHandle.SignalAndWait(handleMessage, handleOpenReceiver);
+
+                        handleOpenReceiver.Reset();
+                    }
+
+                    Thread.Sleep(3000);
                 }
             }
+
             public void Stop()
             {
                 SqlDependency.Stop(connectionString); // прекращаем прослушивать базу данных.
@@ -136,17 +175,13 @@ namespace UpdateTrackerService
 
                             Product product = new Product { Id = id, Name = productName, Price = productPrice, Date = date };
 
-                            using (StreamWriter writer = new StreamWriter("G:\\Практика\\UpdateTrackerService\\log.txt", true))
-                            {
-                                writer.WriteLine(String.Format("{0}", product));
-                                writer.Flush();
-                            }
-
+                            Products.Enqueue(product);
                         }
                     }
 
                     serviceBroker.StartListen(); // после срабатывания события OnChange класса ServiceBroker необходимо заново начать прослушивание бд,
                                                  // т.к. необходимо снова повесить обработчик на данное событие.
+
                 }
             }
         }
@@ -171,6 +206,7 @@ namespace UpdateTrackerService
                 {
                     UpdateTableData(); // каждую секунду вызывает метод, который обновляет данные, если это необходимо.
                     Thread.Sleep(1000);
+
                 }
             }
             public void Stop()

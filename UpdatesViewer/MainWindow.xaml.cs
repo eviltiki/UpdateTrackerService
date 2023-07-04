@@ -159,7 +159,8 @@ namespace UpdatesViewer
         {
             enabled = false;
             _notifyIcon.Dispose();
-            this.Close();
+            ServiceStop();
+            Environment.Exit(0);
         }
 
         private void ServiceStart()
@@ -199,11 +200,6 @@ namespace UpdatesViewer
                 System.Windows.MessageBox.Show($"Произошла ошибка во время прекращения работы сервиса.\n\n{exc}");
             }
 
-        }
-
-        private void Window_Closing(object sender, CancelEventArgs e)
-        {
-            ServiceStop();
         }
     }
 

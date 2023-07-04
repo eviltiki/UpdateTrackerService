@@ -7,8 +7,7 @@
         xmlns:wf="clr-namespace:System.Windows.Forms;assembly=System.Windows.Forms"  
         mc:Ignorable="d"
         Title="Журнал обновлений" Height="265" Width="615"
-        ShowInTaskbar="False"
-        Closing="Window_Closing">
+        ShowInTaskbar="False">
     <Grid>
     </Grid>
 </Window>

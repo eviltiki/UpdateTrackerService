@@ -154,6 +154,8 @@ namespace UpdateTrackerService
 
                         handleOpenReceiver.Reset();
                     }
+
+                    Thread.Sleep(1000);
                 }
             }
 
